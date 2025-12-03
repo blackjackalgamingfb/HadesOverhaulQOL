@@ -102,6 +102,11 @@ function OpenMarketScreen()
 	Attach({ Id = components.CloseButton.Id, DestinationId = components.ShopBackground.Id, OffsetX = 0, OffsetY = 440 })
 	components.CloseButton.OnPressedFunctionName = "CloseMarketScreen"
 	components.CloseButton.ControlHotkey = "Cancel"
+ components.SwapButton = CreateScreenComponent({ Name = "BlankObstacle", Group = "Combat_Menu" })
+ Attach({ Id = components.SwapButton.Id, DestinationId = components.ShopBackground.Id })
+ components.SwapButton.ControlHotkey = "Confirm"
+ components.SwapButton.OnPressedFunctionName = "SwapMarketMode"
+
 	SetScale({ Id = components.ShopBackgroundDim.Id, Fraction = 4 })
 	SetColor({ Id = components.ShopBackgroundDim.Id, Color = {0.090, 0.055, 0.157, 0.7} })
 
@@ -265,22 +270,21 @@ function OpenMarketScreen()
 end
 
 function CloseMarketScreen( screen, button )
-	DisableShopGamepadCursor()
-	CloseScreen( GetAllIds( screen.Components ) )
-	PlaySound({ Name = "/SFX/Menu Sounds/GeneralWhooshMENU" })
-	UnfreezePlayerUnit()
-	screen.KeepOpen = false
-	OnScreenClosed({ Flag = screen.Name })
+			DisableShopGamepadCursor()
+			CloseScreen( GetAllIds( screen.Components ) )
+			PlaySound({ Name = "/SFX/Menu Sounds/GeneralWhooshMENU" })
+	  UnfreezePlayerUnit()
+	  screen.KeepOpen = false
+	  OnScreenClosed({ Flag = screen.Name })
 end
 
 function HandleMarketPurchase( screen, button )
-	local item = button.Data
-
-	if not HasResource( item.CostName, item.CostAmount ) then
-		Flash({ Id = screen.Components["PurchaseButton".. button.Index].Id, Speed = 3, MinFraction = 0.6, MaxFraction = 0.0, Color = Color.CostUnaffordable, ExpireAfterCycle = true })
-		MarketPurchaseFailPresentation( item )
-		return
-	end
+	   local item = button.Data
+    if not HasResource( item.CostName, item.CostAmount ) then
+			   Flash({ Id = screen.Components["PurchaseButton".. button.Index].Id, Speed = 3, MinFraction = 0.6, MaxFraction = 0.0, Color = Color.CostUnaffordable, ExpireAfterCycle = true })
+							MarketPurchaseFailPresentation( item )
+		      return
+	   end
 
 	screen.NumSales = screen.NumSales + 1
 	GameState.MarketSales = (GameState.MarketSales or 0) + 1
@@ -328,8 +332,33 @@ function HandleMarketPurchase( screen, button )
 	else
 		thread( PlayVoiceLines, ResourceData[item.BuyName].BrokerPurchaseVoiceLines, true )
 	end
-end
+end 
 
+function SwapMarketMode()
+    local items = CurrentRun.MarketItems
+
+    if items == nil or #items == 0 then
+        -- Nothing built yet → just build forward
+        GenerateMarketItems()
+        return
+    end
+
+    -- Detect mode by comparing item[1] to BrokerData[1]
+    local first = items[1]
+    local forward = (first.CostName == BrokerData[1].CostName)
+
+    if forward then
+        -- We are in FORWARD → switch to REVERSE
+        CloseMarketScreen(screen, button)
+        GenerateReverseMarketItems()
+        OpenMarketScreen()
+    else
+        -- We are in REVERSE → switch to FORWARD
+        CloseMarketScreen()
+        GenerateMarketItems()
+        OpenMarketScreen()
+    end
+end
 
 
 
