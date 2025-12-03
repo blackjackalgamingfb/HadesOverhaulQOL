@@ -2,7 +2,7 @@
 -- BrokerUpdate - Market Swap System (ModUtil)
 ---------------------------------------------
 
-local mod = ModUtil.RegisterMod("BrokerUpdate")
+local mod = ModUtil.Mod.Register("BrokerBulkUpdate")
 
 -- Approved global
 MarketIsReversed = false
@@ -11,7 +11,7 @@ MarketIsReversed = false
 mod.LogEnabled = true
 local function Log(msg)
     if mod.LogEnabled then
-        ModUtil.Hades.Print("[BrokerUpdate] " .. tostring(msg))
+        ModUtil.Hades.Print("[BrokerBulkUpdate] " .. tostring(msg))
     end
 end
 
