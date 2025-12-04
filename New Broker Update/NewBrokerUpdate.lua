@@ -111,8 +111,7 @@ ModUtil.Path.Override( "OpenMarketScreen", function()
 	Attach({ Id = components.SwapButton.Id, DestinationId = components.ShopBackground.Id })
 	components.SwapButton.OnPressedFunctionName = "SwapMarketItemsScreen"
 	components.SwapButton.ControlHotkey = "Confirm"
-	print("Current Swap Type: "..screen.SwapType)
-
+	
 	SetScale({ Id = components.ShopBackgroundDim.Id, Fraction = 4 })
 	SetColor({ Id = components.ShopBackgroundDim.Id, Color = {0.090, 0.055, 0.157, 0.7} })
 
@@ -139,16 +138,16 @@ ModUtil.Path.Override( "OpenMarketScreen", function()
 				ShadowBlur = 0, ShadowColor = {0,0,0,0}, ShadowOffset={0, 3},
 				Justification = "Center" })
 
-		CreateMarketButtons( screen )
+	CreateMarketButtons( screen )
 
-		if screen.NumItemsOffered == 0 then
-			thread( PlayVoiceLines, GlobalVoiceLines.MarketSoldOutVoiceLines, true )
-		else
-			thread( PlayVoiceLines, GlobalVoiceLines.OpenedMarketVoiceLines, true )
-		end
+	if screen.NumItemsOffered == 0 then
+		thread( PlayVoiceLines, GlobalVoiceLines.MarketSoldOutVoiceLines, true )
+	else
+		thread( PlayVoiceLines, GlobalVoiceLines.OpenedMarketVoiceLines, true )
+	end
 
-		HandleScreenInput( screen )
-		return screen
+	HandleScreenInput( screen )
+	return screen
 
 end)
 
@@ -276,16 +275,6 @@ function CreateMarketButtons( screen )
 			itemLocationY = itemLocationY + itemLocationYSpacer
 		end
 	end
-
-	if screen.NumItemsOffered == 0 then
-		thread( PlayVoiceLines, GlobalVoiceLines.MarketSoldOutVoiceLines, true )
-	else
-		thread( PlayVoiceLines, GlobalVoiceLines.OpenedMarketVoiceLines, true )
-	end
-
-	HandleScreenInput( screen )
-	return screen
-
 end
 
 local function IsMarketCurrentlyReversed()
