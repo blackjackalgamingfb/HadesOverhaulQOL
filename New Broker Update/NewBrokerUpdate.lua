@@ -164,13 +164,42 @@ ModUtil.Path.Override( "OpenMarketScreen", function()
 			ShadowBlur = 0, ShadowColor = {0,0,0,0}, ShadowOffset={0, 3},
 			Justification = "Center" } ))
 
-	CreateTextBox({ Id = components.ShopBackground.Id, Text = "Press Enter(PC), Square(PS) or X(Xbox) to increase and decrease amounts",
-				FontSize = 16,
+	CreateTextBox({ Id = components.ShopBackground.Id, Text = "Press Confirm to swap between Normal Trading and Reverse Trading features"
 				OffsetY = -320, Width = 840,
 				Color = {0.698, 0.702, 0.514, 1.0},
 				Font = "AlegreyaSansSCExtraBold",
 				ShadowBlur = 0, ShadowColor = {0,0,0,0}, ShadowOffset={0, 3},
 				Justification = "Center" })
+
+    local multButtonDefs = {
+        { key = "MultiplierButtonx1",   Text = "x1",   Multiplier = 1,   OffsetX = -400, OffsetY = 380 },
+        { key = "MultiplierButtonx10",  Text = "x10",  Multiplier = 10,  OffsetX =    0, OffsetY = 380 },
+        { key = "MultiplierButtonx100", Text = "x100", Multiplier = 100, OffsetX =  400, OffsetY = 380 },
+    }
+
+    for _, def in ipairs(multButtonDefs) do
+        local comp = CreateScreenComponent({ Name = "Button_Default", Group = "Combat_Menu", Scale = 0.7 })
+        components[def.key] = comp
+
+        Attach({
+            Id = comp.Id,
+            DestinationId = components.ShopBackground.Id,
+            OffsetX = def.OffsetX,
+            OffsetY = def.OffsetY,
+        })
+
+        comp.OnPressedFunctionName = "SetBrokerMultiplier"
+        comp.Multiplier = def.Multiplier
+
+        CreateTextBox({
+            Id = comp.Id,
+            Text = def.Text,
+            FontSize = 22,
+            Color = Color.White,
+            Font = "AlegreyaSansSCBold",
+            Justification = "Center",
+        })
+    end
 
 	CreateMarketButtons( screen )
 
