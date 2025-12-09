@@ -1,4 +1,9 @@
-ModUtil.Mod.Register( "BrokerUpdate" )
+ModUtil.Mod.Register( "NewBrokerUpdate" )
+
+-- Safety init for our flag
+if GameState then
+    GameState.BrokerSwapInProgress = GameState.BrokerSwapInProgress or false
+end
 
 ModUtil.Path.Override( "UseMarketObject", function( usee, args )
 	PlayInteractAnimation( usee.ObjectId )
@@ -300,23 +305,57 @@ local function IsMarketCurrentlyReversed()
 end
 
 function SwapMarketItemsScreen( screen, button )
+    print("SwapMarketItemsScreen Called")
+
     if not CurrentRun.MarketItems or #CurrentRun.MarketItems == 0 then
         GenerateMarketItems()
     else
         if IsMarketCurrentlyReversed() then
-			GenerateMarketItems()
+            if CurrentRun.ForwardMarketItems then
+                CurrentRun.MarketItems = CurrentRun.ForwardMarketItems
+            else
+                CurrentRun.MarketItems = nil
+                GenerateMarketItems()
+            end
         else
-			GenerateReverseMarketItems()
+            GenerateReverseMarketItems()
         end
     end
-	CloseMarketScreen( screen, button )
 
-	wait(0.3)
+    -- Mark that this close is part of a swap, not a real exit
+    if GameState then
+        GameState.BrokerSwapInProgress = true
+    end
+
+    CloseMarketScreen( screen, button )
+
+    if GameState then
+        GameState.BrokerSwapInProgress = false
+    end
+
+    wait(0.3)
 
     OpenMarketScreen()
 end
 
 ModUtil.Path.Override("CloseMarketScreen", function( screen, button )
+    -- Only run cleanup when this is a real close, not a swap
+    if GameState and not GameState.BrokerSwapInProgress and CurrentRun then
+        if CurrentRun.ForwardMarketItems then
+            -- If we somehow left while reversed, snap back to forward
+            if IsMarketCurrentlyReversed and IsMarketCurrentlyReversed() then
+                CurrentRun.MarketItems = CurrentRun.ForwardMarketItems
+            end
+            -- Clear cache so next market session starts clean
+            CurrentRun.ForwardMarketItems = nil
+        end
+    end
+
+    -- Belt-and-suspenders: never leave this stuck true in a save
+    if GameState then
+        GameState.BrokerSwapInProgress = false
+    end
+    return result
 	DisableShopGamepadCursor()
 	CloseScreen( GetAllIds( screen.Components ) )
 	PlaySound({ Name = "/SFX/Menu Sounds/GeneralWhooshMENU" })
