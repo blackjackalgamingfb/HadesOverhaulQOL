@@ -507,7 +507,7 @@ function SetBrokerMultiplier( screen, button )
     -- Highlight the selected one in gold
     if button.TextId then
     ModifyTextBox({
-        Id = comp.TextId,
+        Id = button.TextId,
         ColorTarget = Color.Gold,
         ColorDuration = 0.1,
     })
