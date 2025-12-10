@@ -428,7 +428,11 @@ function SwapMarketItemsScreen( screen, button )
             GenerateReverseMarketItems()
         end
     end
-
+    
+    if CurrentRun then
+        CurrentRun.BrokerMultiplier = 1
+    end
+    
     -- Mark that this close is part of a swap, not a real exit
     if GameState then
         GameState.BrokerSwapInProgress = true
