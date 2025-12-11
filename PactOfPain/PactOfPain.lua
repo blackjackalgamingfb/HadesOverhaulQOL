@@ -156,6 +156,109 @@ OnAnyLoad{
 }
 ]]
 
+-- Internal helper to update the Shrine button text/color/state
+function PoP.UpdateShrineButtonVisual(screen)
+    if not screen or not screen.Components or not screen.Components.ShopBackground then
+        return
+    end
+    local components = screen.Components
+    local btn = components.PactOfPainButton
+    if not btn or not btn.TextId then
+        return
+    end
+
+    local enabled = PoP.IsEnabled()
+    local label = enabled and "Pact of Pain: ON" or "Pact of Pain: OFF"
+    local color = enabled and Color.ShrinePoint or Color.White
+
+    ModifyTextBox({
+        Id = btn.TextId,
+        Text = label,
+        Color = color,
+        AutoSetDataProperties = false,
+    })
+end
+
+-- Called when the UI button is pressed
+function PoP.OnShrineButtonPressed(screen, button)
+    if not PoP.IsHardModeSave() then
+        -- Optional: quick feedback if someone opens this on a non-Hell save
+        PlaySound({ Name = "/Leftovers/SFX/OutOfAmmo", Id = button.Id })
+        return
+    end
+
+    PoP.Toggle()
+    PoP.UpdateShrineButtonVisual(screen)
+    PlaySound({ Name = "/SFX/Menu Sounds/GeneralWhooshMENU", Id = button.Id })
+end
+
+-- Inject the button into the Shrine screen right before input handling starts
+ModUtil.Path.Wrap("HandleScreenInput", function(baseFunc, screen)
+    -- Only touch the Pact of Punishment (Shrine) screen
+    if screen and screen.Name == "ShrineUpgrade" and screen.Components and screen.Components.ShopBackground then
+        local components = screen.Components
+
+        if not components.PactOfPainButton then
+            -- Create a button frame
+            local btn = CreateScreenComponent({
+                Name  = "ShrineUpgradeMenuConfirm",  -- reuse confirm-style button art
+                Group = "Combat_Menu",
+                Scale = 0.8,
+            })
+            components.PactOfPainButton = btn
+
+            -- Attach under/near the Confirm button
+            -- Vanilla StartButton is at OffsetX = 300, OffsetY = 456 
+            Attach({
+                Id = btn.Id,
+                DestinationId = components.ShopBackground.Id,
+                OffsetX = 0,   -- centered under the panel
+                OffsetY = 456,
+            })
+
+            btn.OnPressedFunctionName = "PoP_OnShrineButtonPressed"
+            btn.Sound = "/SFX/Menu Sounds/GodBoonMenuToggle"
+
+            -- Create a child text obstacle for label
+            local textId = CreateScreenObstacle({
+                Name  = "BlankObstacle",
+                Group = "Combat_Menu",
+                X = 0, Y = 0,
+            })
+            btn.TextId = textId
+            Attach({
+                Id = textId,
+                DestinationId = btn.Id,
+                OffsetX = 0,
+                OffsetY = 0,
+            })
+
+            CreateTextBox({
+                Id   = textId,
+                Text = "",
+                Font = "AlegreyaSansSCBold",
+                FontSize = 24,
+                Justification = "Center",
+                ShadowRed = 0, ShadowGreen = 0, ShadowBlue = 0,
+                ShadowAlpha = 1, ShadowBlur = 0,
+                ShadowOffsetY = 2, ShadowOffsetX = 0,
+            })
+
+            -- Expose the handler globally
+            _G["PoP_OnShrineButtonPressed"] = PoP.OnShrineButtonPressed
+
+            -- Initial visual state
+            PoP.UpdateShrineButtonVisual(screen)
+        else
+            -- Screen re-used / re-opened
+            PoP.UpdateShrineButtonVisual(screen)
+        end
+    end
+
+    -- Now let the normal input loop run
+    return baseFunc(screen)
+end)
+
 -- Show a banner at the start of a run when Pact of Pain is active
 ModUtil.Path.Wrap("StartNewRun", function(baseFunc, prevRun, args)
     baseFunc(prevRun, args)
