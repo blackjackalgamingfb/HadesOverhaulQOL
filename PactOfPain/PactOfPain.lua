@@ -304,6 +304,17 @@ ModUtil.Path.Wrap("HandleScreenInput", function(baseFunc, screen)
     return baseFunc(screen)
 end)
 
+ModUtil.Path.Wrap("AddTimerBlock", function(baseFunc, run, flag)
+    if run == nil then
+        DebugPrint({ Text =
+            "PactOfPain DEBUG: AddTimerBlock NIL run. flag="..tostring(flag)..
+            "\nTRACE:\n"..tostring(debug.traceback())
+        })
+        return
+    end
+    return baseFunc(run, flag)
+end)
+
 ----------------------------------------------------------------
 -- OPTIONAL v2: Double resource rewards when PoP is enabled
 -- Uncomment when you’re ready to test.
