@@ -61,9 +61,9 @@ end
 ----------------------------------------------------------------
 
 ModUtil.Path.Wrap("SetupEnemyObject", function(baseFunc, enemy, currentRun)
+    baseFunc(...)
 
-    baseFunc(enemy, currentRun)
-
+    local enemy, currentRun = ...
     if not PoP.IsEnabled() or not currentRun or not enemy then
         return
     end
@@ -113,6 +113,9 @@ end)
 
 ModUtil.Path.Wrap("StartNewRun", function(baseFunc, prevRun, args)
     baseFunc(prevRun, args)
+    if not CurrentRun then 
+        return 
+    end
 
     if not PoP.IsEnabled() then
         return
