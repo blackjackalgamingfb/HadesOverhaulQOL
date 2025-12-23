@@ -7,23 +7,22 @@ end
 
 
 
-function GetBrokerMultiplier()
-    local mult = 1
-
-    if CurrentRun and CurrentRun.BrokerMultiplier then
-        mult = CurrentRun.BrokerMultiplier
-    end
-
-    mult = tonumber(mult) or 1
+local function NormalizeMultiplier(value)
+    local mult = tonumber(value) or 1
     if mult < 1 then
         mult = 1
     end
     return math.floor(mult + 0.5)
 end
 
-local function GetDisplayMarketItem( item, mult )
-    -- Shared helper: takes a raw market item and a multiplier,
-    -- returns a display copy + the two effective values.
+function GetBrokerMultiplier()
+    if CurrentRun and CurrentRun.BrokerMultiplier then
+        return NormalizeMultiplier(CurrentRun.BrokerMultiplier)
+    end
+    return 1
+end
+
+local function GetScaledAmounts( item, mult )
     mult = mult or GetBrokerMultiplier() or 1
 
     local effectiveCost = (item.CostAmount or 0) * mult
@@ -38,6 +37,12 @@ local function GetDisplayMarketItem( item, mult )
         effectiveBuy = 1
     end
 
+    return effectiveCost, effectiveBuy
+end
+
+local function GetDisplayMarketItem( item, mult )
+    local effectiveCost, effectiveBuy = GetScaledAmounts( item, mult )
+
     local displayItem = DeepCopyTable(item)
     displayItem.CostAmount = effectiveCost
     displayItem.BuyAmount  = effectiveBuy
@@ -46,18 +51,65 @@ local function GetDisplayMarketItem( item, mult )
 end
 
 function SetBrokerMultiplierValue(value)
-    local mult = tonumber(value) or 1
-    if mult < 1 then
-        mult = 1
-    end
-    mult = math.floor(mult + 0.5)
+    local mult = NormalizeMultiplier(value)
 
     if CurrentRun then
         CurrentRun.BrokerMultiplier = mult
     end
-
-    print("Broker multiplier set to x"..tostring(mult))
     return mult
+end
+
+local function IsEligibleMarketItem( buyData )
+    return buyData and (buyData.GameStateRequirements == nil or IsGameStateEligible( CurrentRun, buyData, buyData.GameStateRequirements ))
+end
+
+local function ApplyMarketSoldOut( items )
+    if not CurrentRun or not CurrentRun.MarketSoldOut then
+        return
+    end
+    for i, it in ipairs(items) do
+        if CurrentRun.MarketSoldOut[i] then
+            it.SoldOut = true
+        end
+    end
+end
+
+local function BuildReverseMarketItems( forwardItems )
+    local reverseItems = {}
+    for i, item in ipairs(forwardItems) do
+        if type(item) == "table" then
+            local rev = DeepCopyTable(item)
+
+            -- link back so SoldOut can be mirrored to forward
+            rev.SourceIndex = i
+
+            -- swap roles
+            rev.BuyName, rev.CostName       = item.CostName, item.BuyName
+            rev.BuyAmount, rev.CostAmount   = item.CostAmount, item.BuyAmount
+
+            -- regen display fields (guard ResourceData lookups)
+            local buyRes  = ResourceData and rev.BuyName  and ResourceData[rev.BuyName]
+            local costRes = ResourceData and rev.CostName and ResourceData[rev.CostName]
+
+            if buyRes then
+                rev.BuyTitle = buyRes.TitleName
+                rev.BuyTitleSingular = buyRes.TitleName_Singular or buyRes.TitleName
+                if buyRes.IconString then
+                    rev.BuyIcon = "{!Icons."..buyRes.IconString.."}"
+                end
+            end
+
+            if costRes and costRes.SmallIconString then
+                rev.CostIcon = "{!Icons."..costRes.SmallIconString.."}"
+            end
+
+            reverseItems[i] = rev
+        end
+    end
+
+    ApplyMarketSoldOut(reverseItems)
+
+    return reverseItems
 end
 
 ModUtil.Path.Override( "UseMarketObject", function( usee, args )
@@ -98,7 +150,7 @@ ModUtil.Path.Override( "GenerateMarketItems", function()
 		elseif numRemainingTempOptions > 0 then
 			buyData = RemoveRandomValue( buyOptions )
 
-			if buyData and buyData.GameStateRequirements == nil or IsGameStateEligible( CurrentRun, buyData, buyData.GameStateRequirements ) then
+			if IsEligibleMarketItem(buyData) then
 				numRemainingTempOptions = numRemainingTempOptions - 1
 			end
 		end
@@ -107,41 +159,44 @@ ModUtil.Path.Override( "GenerateMarketItems", function()
 		buyData.BuyTitleSingular = ResourceData[buyData.BuyName].TitleName_Singular or ResourceData[buyData.BuyName].TitleName
 		buyData.BuyIcon = "{!Icons."..ResourceData[buyData.BuyName].IconString.."}"
 		buyData.CostIcon = "{!Icons."..ResourceData[buyData.CostName].SmallIconString.."}"
-		if buyData and buyData.GameStateRequirements == nil or IsGameStateEligible( CurrentRun, buyData, buyData.GameStateRequirements ) then
+		if IsEligibleMarketItem(buyData) then
 			table.insert( CurrentRun.MarketItems, DeepCopyTable( buyData ))
 		end
 	end
-    -- Cache a copy of the forward items for reverse swapping
-    CurrentRun.ForwardMarketItems = ShallowCopyTable(CurrentRun.MarketItems)
+    -- Re-apply persistent sold-out flags (prevents LTO resurrecting)
+    ApplyMarketSoldOut(CurrentRun.MarketItems)
+
+
+    -- Cache forward items only once so SoldOut state survives swaps
+    if not CurrentRun.ForwardMarketItems then
+        CurrentRun.ForwardMarketItems = ShallowCopyTable(CurrentRun.MarketItems)
+    end
 
     return CurrentRun.MarketItems
 end)
 
 
 function GenerateReverseMarketItems()
-    local forwardItems = GenerateMarketItems()
+    local forwardItems = CurrentRun and CurrentRun.ForwardMarketItems
 
-    local reverseItems = {}
-    for i, item in ipairs(forwardItems) do
-        local rev = DeepCopyTable(item)
-
-        -- swap roles
-        rev.BuyName, rev.CostName = item.CostName, item.BuyName
-        rev.BuyAmount, rev.CostAmount = item.CostAmount, item.BuyAmount
-
-        -- regen display fields
-        rev.BuyTitle = ResourceData[rev.BuyName].TitleName
-        rev.BuyTitleSingular = ResourceData[rev.BuyName].TitleName_Singular or ResourceData[rev.BuyName].TitleName
-        rev.BuyIcon = "{!Icons."..ResourceData[rev.BuyName].IconString.."}"
-        rev.CostIcon = "{!Icons."..ResourceData[rev.CostName].SmallIconString.."}"
-
-        reverseItems[i] = rev
+    if type(forwardItems) ~= "table" or next(forwardItems) == nil then
+        GenerateMarketItems()
+        forwardItems = CurrentRun and CurrentRun.ForwardMarketItems
     end
 
-	CurrentRun.MarketItems = reverseItems
+    if type(forwardItems) ~= "table" then
+        forwardItems = (CurrentRun and CurrentRun.MarketItems) or {}
+    end
+
+    local reverseItems = BuildReverseMarketItems(forwardItems)
+    if CurrentRun then
+        CurrentRun.MarketItems = reverseItems
+    end
+
 
     return reverseItems
 end
+
 
 ModUtil.Path.Override( "OpenMarketScreen", function()
 
@@ -261,7 +316,7 @@ ModUtil.Path.Override( "OpenMarketScreen", function()
 			ShadowBlur = 0, ShadowColor = {0,0,0,0}, ShadowOffset = {0, 3},
 			Justification = "Center" } ))
 
-	CreateTextBox({ Id = components.ShopBackground.Id, Text = "Press Confirm to swap between Normal Trading and Reverse Trading features",
+	CreateTextBox({ Id = components.ShopBackground.Id, Text = "Press Confirm (Enter on PC, X on XBox, Square on PS) to swap between Normal Trading and Reverse Trading features",
                 FontSize = 16,
 				OffsetY = -320, Width = 840,
 				Color = {0.698, 0.702, 0.514, 1.0},
@@ -379,7 +434,7 @@ function CreateMarketButtons( screen )
                 CreateTextBox({
                     Id          = components[purchaseButtonTitleKey].Id,
                     Text        = titleText,
-                    FontSize    = 48 * yScale,      -- <<<< YOUR REQUIRED SIZE
+                    FontSize    = 48 * yScale,      
                     OffsetX     = -350,
                     OffsetY     = -24,
                     Width       = 650,
@@ -397,7 +452,7 @@ function CreateMarketButtons( screen )
                 CreateTextBox({
                     Id          = components[sellTextKey].Id,
                     Text        = "MarketScreen_Cost",
-                    FontSize    = 48 * yScale,      -- <<<< YOUR REQUIRED SIZE
+                    FontSize    = 48 * yScale,      
                     OffsetX     = 420,
                     OffsetY     = -24,
                     Width       = 720,
@@ -488,7 +543,7 @@ local function UpdateBrokerUIForMultiplier( screen )
                 ModifyTextBox({
                     Id       = titleComp.Id,
                     Text     = titleText,
-                    FontSize = 48 * yScale,      -- <<<< REQUIRED SIZE
+                    FontSize = 48 * yScale,      
                     LuaKey   = "TempTextData",
                     LuaValue = displayItem,
                 })
@@ -501,7 +556,7 @@ local function UpdateBrokerUIForMultiplier( screen )
                 ModifyTextBox({
                     Id       = sellComp.Id,
                     Text     = "MarketScreen_Cost",
-                    FontSize = 48 * yScale,      -- <<<< REQUIRED SIZE
+                    FontSize = 48 * yScale,      
                     LuaKey   = "TempTextData",
                     LuaValue = displayItem,
                 })
@@ -532,7 +587,7 @@ local function UpdateBrokerUIForMultiplier( screen )
 end
 
 function SetBrokerMultiplier( screen, button )
-    -- Sometimes called as SetBrokerMultiplier(button)
+
     if button ~= nil and button.Id ~= nil and (screen == nil or screen.Name == nil) then
         screen = ActiveScreens and ActiveScreens.Market
     end
@@ -541,10 +596,8 @@ function SetBrokerMultiplier( screen, button )
         return
     end
 
-    -- Set and clamp the multiplier using your helper
     local mult = SetBrokerMultiplierValue(button.Multiplier)
 
-    -- Find the active screen if not passed in
     if not screen or not screen.Components then
         screen = ActiveScreens and ActiveScreens.Market
     end
@@ -553,7 +606,7 @@ function SetBrokerMultiplier( screen, button )
     end
 
     local components = screen.Components
-    -- Reset all multiplier button colors to white
+    
     for _, value in ipairs({ 1, 5, 10, 25, 50, 100, 250, 500, 1000 }) do
         local key = "MultiplierButtonx"..tostring(value)
         local comp = components[key]
@@ -566,7 +619,6 @@ function SetBrokerMultiplier( screen, button )
         end
     end
 
-    -- Highlight the selected one in gold
     if button.TextId then
     ModifyTextBox({
         Id = button.TextId,
@@ -670,22 +722,7 @@ ModUtil.Path.Override( "HandleMarketPurchase", function( screen, button )
     end
 
     local mult = GetBrokerMultiplier()
-
-    local rawCostAmount = item.CostAmount or 0
-    local rawBuyAmount  = item.BuyAmount or 0
-
-    local costAmount = rawCostAmount * mult
-    local buyAmount  = rawBuyAmount * mult
-
-    costAmount = math.floor(costAmount + 0.5)
-    buyAmount  = math.floor(buyAmount + 0.5)
-
-    if costAmount < 1 then
-        costAmount = 1
-    end
-    if buyAmount < 1 then
-        buyAmount = 1
-    end
+    local costAmount, buyAmount = GetScaledAmounts(item, mult)
 
     if not HasResource( item.CostName, costAmount ) then
         Flash({
@@ -708,6 +745,12 @@ ModUtil.Path.Override( "HandleMarketPurchase", function( screen, button )
         MarketPurchaseSuccessRepeatablePresentation( button )
     else
         item.SoldOut = true
+
+        CurrentRun.MarketSoldOut = CurrentRun.MarketSoldOut or {}
+        local soldIndex = item.SourceIndex or button.Index
+        CurrentRun.MarketSoldOut[soldIndex] = true
+    
+
         local ids = {}
         local function TryAddComponentId(key)
             local comp = screen.Components[key]
@@ -759,23 +802,21 @@ ModUtil.Path.Override( "HandleMarketPurchase", function( screen, button )
     -- Check updated affordability (also scaled by current multiplier)
     for itemIndex, marketItem in ipairs( CurrentRun.MarketItems ) do
         if not marketItem.SoldOut then
-            local baseCost = marketItem.CostAmount or 0
-            local effectiveCost = baseCost * mult
-            effectiveCost = math.floor(effectiveCost + 0.5)
-            if effectiveCost < 1 then
-                effectiveCost = 1
-            end
+            local sellComp = screen.Components["PurchaseButtonTitle"..itemIndex.."SellText"]
+            if sellComp and sellComp.Id then
+                local effectiveCost = GetScaledAmounts(marketItem, mult)
 
-            local costColor = Color.TradeAffordable
-            if not HasResource( marketItem.CostName, effectiveCost ) then
-                costColor = Color.TradeUnaffordable
-            end
+                local costColor = Color.TradeAffordable
+                if not HasResource( marketItem.CostName, effectiveCost ) then
+                    costColor = Color.TradeUnaffordable
+                end
 
-            ModifyTextBox({
-                Id = screen.Components["PurchaseButtonTitle"..itemIndex.."SellText"].Id,
-                ColorTarget = costColor,
-                ColorDuration = 0.1
-            })
+                ModifyTextBox({
+                    Id = screen.Components["PurchaseButtonTitle"..itemIndex.."SellText"].Id,
+                    ColorTarget = costColor,
+                    ColorDuration = 0.1
+                })
+            end
         end
     end
 
