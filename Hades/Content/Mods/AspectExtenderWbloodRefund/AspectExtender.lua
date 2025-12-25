@@ -118,7 +118,8 @@ ModUtil.Path.Override("ShowWeaponUpgradeScreen", function (args)
     end
     components.RefundButton = CreateScreenComponent({ Name = "ButtonRefund", Scale = 1, Group = "Combat_Menu_TraitTray" })
     Attach({ Id = components.RefundButton.Id, DestinationId = components.ShopBackground.Id, OffsetX = 630, OffsetY = -380 })
-    components.RefundButton.OnPressedFunctionName = "RefundBlood"
+    SetAnimation({ DestinationId = components.RefundButton.Id, Name = "LevelUpRefund" })
+    components.RefundButton.OnPressedFunctionName = "AspectExtender_RefundBlood"
     components.RefundButton.Cost = bloodCost
     components.RefundButton.KeyCost = amount
     components.RefundButton.Weapon = weaponName
@@ -510,7 +511,7 @@ function AspectExtender.WeaponUpgradeScreenLoadPage(screen)
 	end
 end
 
-function RefundBlood(screen, button)
+function AspectExtender.RefundBlood(screen, button)
     local weaponName = button.Weapon
     local bloodCost = button.Cost
     local keyCost = button.KeyCost
@@ -527,3 +528,5 @@ function RefundBlood(screen, button)
         end
     end
 end
+
+_G.AspectExtender_RefundBlood = AspectExtender.RefundBlood
