@@ -515,7 +515,7 @@ function RefundBlood(screen, button)
     local bloodCost = button.Cost
     local keyCost = button.KeyCost
     local bloodRefundConfig = AspectExtender.BloodRefundConfig
-    if bloodCost > 0 and HasResource("LockKeys", keyCost) then
+    if bloodCost > 0 and (bloodRefundConfig.FreeMode or HasResource("LockKeys", keyCost)) then
         for itemIndex, itemData in pairs( WeaponUpgradeData[weaponName] ) do
             GameState.WeaponUnlocks[weaponName][itemIndex] = 0
         end
