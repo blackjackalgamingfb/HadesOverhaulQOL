@@ -1,6 +1,7 @@
 ModUtil.Mod.Register("AspectExtender")
 
 AspectExtender = AspectExtender or {}
+AspectExtender.BloodRefundConfig = AspectExtender.BloodRefundConfig or { KeyCostPerBloodRefunded = 1, FreeMode = false }
 
 ModUtil.Path.Override("ShowWeaponUpgradeScreen", function (args)
     local textOffsetX = -50
@@ -100,6 +101,41 @@ ModUtil.Path.Override("ShowWeaponUpgradeScreen", function (args)
     })
     PlaySound({ Name = "/SFX/Menu Sounds/GeneralWhooshMENULoud" })
     thread( PlayVoiceLines, GlobalVoiceLines.OpenedWeaponUpgradeMenuVoiceLines, true )
+
+    local bloodRefundConfig = AspectExtender.BloodRefundConfig
+    local bloodCost = 0
+    for itemIndex, itemData in pairs( WeaponUpgradeData[weaponName] ) do
+        local level = GetWeaponUpgradeLevel( weaponName, itemIndex )
+        if level > 0 then
+            for i = level, 1, -1 do
+                bloodCost = bloodCost + itemData.Costs[i]
+            end
+        end
+    end
+    local amount = bloodCost * bloodRefundConfig.KeyCostPerBloodRefunded
+    if bloodRefundConfig.FreeMode then
+        amount = 0
+    end
+    components.RefundButton = CreateScreenComponent({ Name = "ButtonRefund", Scale = 1, Group = "Combat_Menu_TraitTray" })
+    Attach({ Id = components.RefundButton.Id, DestinationId = components.ShopBackground.Id, OffsetX = 630, OffsetY = -380 })
+    components.RefundButton.OnPressedFunctionName = "RefundBlood"
+    components.RefundButton.Cost = bloodCost
+    components.RefundButton.KeyCost = amount
+    components.RefundButton.Weapon = weaponName
+
+    local color = Color.White
+    if not bloodRefundConfig.FreeMode or bloodCost == 0 then
+        if not HasResource("LockKeys", amount) or bloodCost == 0 then
+            color = Color.CostUnaffordable
+        end
+    end
+
+    CreateTextBox({ Id = components.RefundButton.Id, Text = "WeaponUpgrade_Refund", FontSize = 22, Color = color, Font = "AlegreyaSansSCBold",
+        OffsetX = 35, LuaKey = "TempTextData", LuaValue = { Amount = bloodCost }, })
+    if not bloodRefundConfig.FreeMode then
+        CreateTextBox({ Id = components.RefundButton.Id, Text = "WeaponUpgrade_Key_Cost", FontSize = 19, Color = color, Font = "AlegreyaSansSCBold",
+            OffsetX = 35, OffsetY = 45, LuaKey = "TempTextData", LuaValue = { Amount = amount }, })
+    end
 
     AspectExtender.WeaponUpgradeScreenLoadPage(screen)
 
@@ -472,4 +508,22 @@ function AspectExtender.WeaponUpgradeScreenLoadPage(screen)
 		end
 		offsetIndex = offsetIndex + 1
 	end
+end
+
+function RefundBlood(screen, button)
+    local weaponName = button.Weapon
+    local bloodCost = button.Cost
+    local keyCost = button.KeyCost
+    local bloodRefundConfig = AspectExtender.BloodRefundConfig
+    if bloodCost > 0 and (bloodRefundConfig.FreeMode or HasResource("LockKeys", keyCost)) then
+        for itemIndex, itemData in pairs( WeaponUpgradeData[weaponName] ) do
+            GameState.WeaponUnlocks[weaponName][itemIndex] = 0
+        end
+        SelectWeaponUpgrade( screen, weaponName, 1 )
+        CloseWeaponUpgradeScreen(screen, button)
+        AddResource("SuperLockKeys", bloodCost, "Item")
+        if not bloodRefundConfig.FreeMode then
+            SpendResource("LockKeys", keyCost, "Item")
+        end
+    end
 end
