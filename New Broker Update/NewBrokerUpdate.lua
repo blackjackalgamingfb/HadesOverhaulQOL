@@ -5,8 +5,6 @@ if GameState then
     GameState.BrokerSwapInProgress = GameState.BrokerSwapInProgress or false
 end
 
-
-
 local function NormalizeMultiplier(value)
     local mult = tonumber(value) or 1
     if mult < 1 then
@@ -175,7 +173,6 @@ ModUtil.Path.Override( "GenerateMarketItems", function()
     return CurrentRun.MarketItems
 end)
 
-
 function GenerateReverseMarketItems()
     local forwardItems = CurrentRun and CurrentRun.ForwardMarketItems
 
@@ -196,7 +193,6 @@ function GenerateReverseMarketItems()
 
     return reverseItems
 end
-
 
 ModUtil.Path.Override( "OpenMarketScreen", function()
 
@@ -502,7 +498,6 @@ function CreateMarketButtons( screen )
         end
     end
 end
-
 
 local function UpdateBrokerUIForMultiplier( screen )
     if not screen or not screen.Components then
@@ -826,6 +821,7 @@ ModUtil.Path.Override( "HandleMarketPurchase", function( screen, button )
         thread( PlayVoiceLines, ResourceData[item.BuyName].BrokerPurchaseVoiceLines, true )
     end
 end)
+
 
 
 
